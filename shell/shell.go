@@ -50,8 +50,15 @@ func silentRun(buildCmd func(ctx context.Context) *exec.Cmd) (string, error) {
 		if len(errMsg) > maxSilentStderr {
 			errMsg = errMsg[:maxSilentStderr]
 		}
+		callerMu.RLock()
+		caller := currentCaller
+		callerMu.RUnlock()
 		if errMsg != "" {
-			err = fmt.Errorf("%w: %s", err, errMsg)
+			if caller != "" {
+				err = fmt.Errorf("%w: %s: %s", err, caller, errMsg)
+			} else {
+				err = fmt.Errorf("%w: %s", err, errMsg)
+			}
 		}
 		return strings.TrimSpace(stdout.String()), err
 	}

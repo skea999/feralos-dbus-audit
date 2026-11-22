@@ -12,7 +12,7 @@ release tag).
 
 ## Usage
 
-```
+```text
 feralos-dbus-audit [--log-file <path>] [--user <name>] [--no-fail]
 ```
 
@@ -26,7 +26,7 @@ applies to dinit boots only.
 
 ## Build
 
-```
+```sh
 go build -o feralos-dbus-audit .
 ```
 
