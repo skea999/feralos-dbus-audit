@@ -1,0 +1,113 @@
+name: CI
+
+# ALL gates blocking (same posture as the feralos installer repo — fmt, vet,
+# golangci-lint incl. gosec, tests, build, govulncheck, gitleaks, yamllint,
+# editorconfig-checker, typos, markdownlint-cli2).
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gofmt-vet-test-build:
+    name: gofmt + vet + test + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: gofmt
+        run: |
+          dirty="$(gofmt -l .)"
+          [ -z "$dirty" ] || { echo "$dirty"; exit 1; }
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test -count=1 ./...
+
+      - name: Build
+        run: go build -trimpath -o feralos-dbus-audit .
+
+  golangci-lint:
+    name: golangci-lint (gosec included)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
+
+  govulncheck:
+    name: govulncheck (blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          "$(go env GOPATH)/bin/govulncheck" ./...
+
+  gitleaks:
+    name: gitleaks (blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  yamllint:
+    name: yamllint (blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: yamllint
+        run: |
+          pip install yamllint==1.38.0 --quiet
+          files="$(find . -type f \( -name '*.yaml' -o -name '*.yml' \) ! -path './.git/*' | sort)"
+          [ -n "$files" ] || { echo "no YAML files"; exit 0; }
+          yamllint -c .yamllint.yml $files
+
+  editorconfig:
+    name: editorconfig-checker (blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: editorconfig-checker
+        run: |
+          curl -sL -o /tmp/ec.tar.gz "https://github.com/editorconfig-checker/editorconfig-checker/releases/latest/download/editorconfig-checker-linux-amd64.tar.gz"
+          tar -xzf /tmp/ec.tar.gz
+          ./editorconfig-checker -config .ecrc
+
+  typos:
+    name: typos (blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: typos
+        uses: crate-ci/typos@v1
+        with:
+          config: ./typos.toml
+
+  markdownlint:
+    name: markdownlint-cli2 (blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: markdownlint-cli2
+        run: npx --yes markdownlint-cli2 "*.md" ".github/**/*.md"
